@@ -18,20 +18,34 @@
 #define QUANTITY 2
 #define SCAN_RATE 30000
 
+// **************** Soil Moisture + Temp + EC ****************
+#define EC_SENSING_MODE
+// ***********************************************************
+
 unsigned long currentMillis = 0;
 unsigned long previousMillis = 0; // Stores last time using Reference time
 
 unsigned int messageID = 0;
+#if defined(EC_SENSING_MODE)
+float t;
+float soil_m; // Soil Moisture
+float ec;     // 전기 전도도
+#else
 float t;
 float h;
+#endif
 
-const uint8_t rxPin = 16; // RX-RO
-const uint8_t txPin = 17; // TX-DI
-const uint8_t dePin = 19; // DE+RE
+const uint8_t rxPin = 33; // RX-RO
+const uint8_t txPin = 32; // TX-DI
+const uint8_t dePin = 25; // DE+RE
 
 ModbusRTUMaster modbus(Serial1, dePin); // serial port, driver enable pin for rs-485 (optional)
 
+#if defined(EC_SENSING_MODE)
+uint16_t holdingRegisters[3] = {0xFF, 0xFF, 0xFF};
+#else
 uint16_t holdingRegisters[2] = {0xFF, 0xFF};
+#endif
 
 void setup()
 {
@@ -48,13 +62,22 @@ void loop()
     currentMillis = millis();
     if (currentMillis - previousMillis >= SCAN_RATE)
     {
+        Serial.print("Prieod: ");
         Serial.println(currentMillis - previousMillis);
 
+#if defined(EC_SENSING_MODE)
+        modbus.readHoldingRegisters(1, 0, holdingRegisters, 3);
+        t = holdingRegisters[0] / 10.0;
+        soil_m = holdingRegisters[1] / 10.0;
+        ec = holdingRegisters[2] / 1000.0;
+        Serial.printf("RK520-02 [messageID]: %d | [TEMP]: %.1f, [Moisture]: %.1f, [EC]: %.2f,\n", messageID, t, soil_m, ec);
+
+#else
         modbus.readHoldingRegisters(1, 0, holdingRegisters, 2);
         t = holdingRegisters[0] / 10.0;
         h = holdingRegisters[1] / 10.0;
         Serial.printf("TZ-THT02 [messageID]: %d | [TEMP]: %.1f, [HUMI]: %.1f\n", messageID, t, h);
-
+#endif
         previousMillis = currentMillis;
         messageID++;
     }
